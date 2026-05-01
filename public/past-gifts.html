@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>past gifts · wishlist</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="icon" href="/favicon.ico">
+</head>
+<body>
+  <main>
+    <h1 class="page-title" style="margin-bottom:6px">past gifts 🎁</h1>
+    <p class="page-subtitle" style="margin-bottom:22px">a little hall of fame of given joys ✨</p>
+    <div id="list"></div>
+  </main>
+  <footer>🎀 made with love</footer>
+
+  <script type="module">
+    import {
+      api, requireUser, mountHeader, fmtPrice, fmtDate, hostname,
+      wantLevel, WANT_STYLE, el,
+    } from '/app.js';
+
+    let viewer;
+
+    async function init() {
+      viewer = await requireUser();
+      mountHeader(viewer, 'past');
+
+      const list = document.getElementById('list');
+      list.replaceChildren(el('p', { style: { textAlign: 'center', color: 'var(--ink-soft)' } }, 'loading…'));
+
+      const items = await api('/api/items/gifted');
+      list.replaceChildren();
+      if (!items.length) {
+        list.appendChild(el(
+          'div',
+          { class: 'cute-card empty-state' },
+          el('div', { class: 'emoji' }, '🌷'),
+          el('h2', {}, 'no past gifts yet'),
+          el('p', {}, "once an item gets marked gifted, it'll live here forever"),
+          el('a', { href: '/', class: 'cute-btn' }, 'back to wishlist')
+        ));
+        return;
+      }
+      const grid = el('div', { class: 'item-grid' });
+      for (const it of items) grid.appendChild(card(it));
+      list.appendChild(grid);
+    }
+
+    function card(it) {
+      const want = wantLevel(it.wantLevel);
+      const ws = WANT_STYLE[it.wantLevel] || WANT_STYLE[3];
+
+      const meta = el('div', { class: 'item-meta' });
+      meta.appendChild(el(
+        'span',
+        { class: 'want-pill', style: { background: ws.bg, color: ws.color } },
+        `${want.emoji} ${want.label}`
+      ));
+      meta.appendChild(el(
+        'span',
+        { class: 'want-pill', style: { background: '#fff0db', color: '#b8721e' } },
+        '🎁 gifted'
+      ));
+
+      const imgWrap = el('div', { class: 'img-wrap' });
+      if (it.imageUrl) {
+        imgWrap.appendChild(el('img', { src: it.imageUrl, alt: it.name }));
+      } else {
+        imgWrap.appendChild(el('span', { style: { fontSize: '32px' } }, '🎁'));
+      }
+
+      const body = el(
+        'div',
+        { class: 'item-body' },
+        meta,
+        el('h3', {}, it.name),
+        el('a', {
+          href: it.link, target: '_blank', rel: 'noopener noreferrer', class: 'host',
+        }, `${hostname(it.link)} ↗`)
+      );
+
+      const right = el(
+        'div',
+        { style: { textAlign: 'right', flexShrink: '0' } },
+        el('div', { class: 'item-price' }, fmtPrice(it.price)),
+        el('div', { class: 'item-byline' }, it.addedBy === 'Tianna' ? '🍌 Tianna' : '💌 Isaiah')
+      );
+
+      const row = el('div', { class: 'item-row' }, imgWrap, body, right);
+      const footer = el(
+        'div',
+        { class: 'item-footer' },
+        el('div', { class: 'when' }, `gifted ${fmtDate(it.giftedAt)}`),
+        el('div', {})
+      );
+      return el('div', { class: 'cute-card' }, row, footer);
+    }
+
+    init().catch((e) => {
+      console.error(e);
+      document.getElementById('list').textContent = 'error: ' + e.message;
+    });
+  </script>
+</body>
+</html>

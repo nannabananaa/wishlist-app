@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>add a wish · wishlist</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="icon" href="/favicon.ico">
+</head>
+<body>
+  <main>
+    <h1 class="page-title" style="margin-bottom:18px">+ add a wish</h1>
+    <div class="cute-card">
+      <div id="err" class="error-banner" style="display:none"></div>
+      <form id="form">
+        <div class="field">
+          <label for="link">link</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap">
+            <input type="url" id="link" name="link" class="cute-input" required placeholder="https://...">
+            <button type="button" id="fetchBtn" class="cute-btn-soft">✨ auto-fill</button>
+          </div>
+          <p id="fetchHint" style="font-size:12px; color:var(--ink-soft); margin:6px 0 0; display:none"></p>
+        </div>
+
+        <div class="field">
+          <label for="name">name</label>
+          <input type="text" id="name" name="name" class="cute-input" maxlength="200" required>
+        </div>
+
+        <div class="field">
+          <label for="price">price (optional)</label>
+          <input type="number" id="price" name="price" class="cute-input" step="0.01" min="0">
+        </div>
+
+        <div class="field">
+          <label>want level</label>
+          <div class="want-input" id="wantInput"></div>
+          <input type="hidden" name="wantLevel" id="wantLevel" value="3">
+        </div>
+
+        <div class="field">
+          <label for="image">image (optional)</label>
+          <input type="file" id="image" accept="image/*" class="cute-input">
+          <img id="preview" class="image-preview" style="display:none" alt="preview">
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap">
+          <button type="submit" id="saveBtn" class="cute-btn">save 💖</button>
+          <a href="/" class="cute-btn-ghost">cancel</a>
+        </div>
+      </form>
+    </div>
+  </main>
+  <footer>🎀 made with love</footer>
+
+  <script type="module">
+    import { api, requireUser, mountHeader, fileToDataUrl, showError, clearError } from '/app.js';
+
+    let imageData = null;
+
+    async function init() {
+      const user = await requireUser();
+      mountHeader(user, 'add');
+
+      // Want level pills
+      const wantInput = document.getElementById('wantInput');
+      const wantHidden = document.getElementById('wantLevel');
+      const labels = ['😐 meh', '🙂 nice', '😍 want', '🤩 really want', '🚨 NEED'];
+      function setWant(v) {
+        wantHidden.value = v;
+        for (const b of wantInput.children) {
+          b.classList.toggle('active', Number(b.dataset.v) === v);
+        }
+      }
+      for (let i = 1; i <= 5; i++) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.v = i;
+        b.textContent = labels[i - 1];
+        b.addEventListener('click', () => setWant(i));
+        wantInput.appendChild(b);
+      }
+      setWant(3);
+
+      // Image upload preview
+      const imgInput = document.getElementById('image');
+      const preview = document.getElementById('preview');
+      imgInput.addEventListener('change', async () => {
+        const f = imgInput.files?.[0];
+        if (!f) {
+          imageData = null;
+          preview.style.display = 'none';
+          return;
+        }
+        if (f.size > 4 * 1024 * 1024) {
+          alert('Image too big — max 4MB');
+          imgInput.value = '';
+          return;
+        }
+        imageData = await fileToDataUrl(f);
+        preview.src = imageData;
+        preview.style.display = 'block';
+      });
+
+      // Auto-fill via fetch-price
+      const fetchBtn = document.getElementById('fetchBtn');
+      const linkInput = document.getElementById('link');
+      const nameInput = document.getElementById('name');
+      const priceInput = document.getElementById('price');
+      const fetchHint = document.getElementById('fetchHint');
+      fetchBtn.addEventListener('click', async () => {
+        const url = linkInput.value.trim();
+        if (!url) {
+          fetchHint.textContent = 'paste a link first';
+          fetchHint.style.display = 'block';
+          return;
+        }
+        fetchBtn.disabled = true;
+        fetchHint.textContent = 'fetching…';
+        fetchHint.style.display = 'block';
+        try {
+          const r = await api('/api/fetch-price', { method: 'POST', body: { url } });
+          if (r.title && !nameInput.value) nameInput.value = r.title;
+          if (r.price != null && !priceInput.value) priceInput.value = String(r.price);
+          fetchHint.textContent = (r.title || r.price != null) ? 'autofilled ✨' : 'nothing found';
+        } catch (ex) {
+          fetchHint.textContent = ex.message;
+        } finally {
+          fetchBtn.disabled = false;
+        }
+      });
+
+      // Submit
+      const err = document.getElementById('err');
+      const saveBtn = document.getElementById('saveBtn');
+      document.getElementById('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        clearError(err);
+        saveBtn.disabled = true;
+        const fd = new FormData(e.target);
+        try {
+          await api('/api/items', {
+            method: 'POST',
+            body: {
+              name: fd.get('name'),
+              link: fd.get('link'),
+              price: fd.get('price') === '' ? null : Number(fd.get('price')),
+              wantLevel: Number(fd.get('wantLevel')),
+              imageUrl: imageData,
+            },
+          });
+          window.location.href = '/';
+        } catch (ex) {
+          showError(err, ex.message);
+          saveBtn.disabled = false;
+        }
+      });
+    }
+
+    init().catch((e) => console.error(e));
+  </script>
+</body>
+</html>

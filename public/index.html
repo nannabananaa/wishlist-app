@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>wishlist 💖</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="icon" href="/favicon.ico">
+</head>
+<body>
+  <main>
+    <div class="title-row">
+      <div>
+        <h1 class="page-title">The wishlist 💖</h1>
+        <p class="page-subtitle" id="subtitle"></p>
+      </div>
+      <a href="/add" class="cute-btn">+ add a wish</a>
+    </div>
+
+    <div class="cute-card filter-row">
+      <div class="filter-group">
+        <div class="label-mini">added by</div>
+        <div class="chips" id="addedByChips"></div>
+      </div>
+      <div class="filter-group" style="flex:1; min-width:240px">
+        <div class="label-mini">sort by</div>
+        <div class="chips" id="sortChips"></div>
+      </div>
+    </div>
+
+    <div id="list"></div>
+  </main>
+  <footer>🎀 made with love</footer>
+
+  <script type="module">
+    import {
+      api, requireUser, mountHeader, fmtPrice, fmtDate, hostname,
+      wantLevel, WANT_STYLE, escapeHtml, el,
+    } from '/app.js';
+
+    const SORTS = [
+      ['newest', 'newest first'],
+      ['oldest', 'oldest first'],
+      ['price-low', 'price: low → high'],
+      ['price-high', 'price: high → low'],
+      ['want-high', 'want: high → low'],
+      ['want-low', 'want: low → high'],
+    ];
+
+    const params = new URLSearchParams(location.search);
+    let addedBy = params.get('addedBy') || 'all';
+    let sort = SORTS.some(([v]) => v === params.get('sort')) ? params.get('sort') : 'newest';
+    let viewer;
+
+    async function init() {
+      viewer = await requireUser();
+      mountHeader(viewer, 'home');
+      document.getElementById('subtitle').textContent =
+        viewer === 'Tianna'
+          ? 'all your dreamy little wants in one place'
+          : 'pssst — claim items secretly, only you can see those 🤫';
+      renderFilters();
+      await refresh();
+    }
+
+    function renderFilters() {
+      const ab = document.getElementById('addedByChips');
+      ab.replaceChildren();
+      const choices = [
+        ['all', 'everyone'],
+        ['Tianna', '🍌 Tianna'],
+        ['Isaiah', '💌 Isaiah'],
+      ];
+      for (const [v, label] of choices) {
+        ab.appendChild(chip(label, addedBy === v, () => {
+          addedBy = v; updateUrl(); renderFilters(); refresh();
+        }));
+      }
+      const sc = document.getElementById('sortChips');
+      sc.replaceChildren();
+      for (const [v, label] of SORTS) {
+        sc.appendChild(chip(label, sort === v, () => {
+          sort = v; updateUrl(); renderFilters(); refresh();
+        }));
+      }
+    }
+
+    function chip(label, active, onClick) {
+      return el('button', {
+        type: 'button',
+        class: 'cute-btn-ghost' + (active ? ' active' : ''),
+        on: { click: onClick },
+      }, label);
+    }
+
+    function updateUrl() {
+      const p = new URLSearchParams();
+      if (addedBy !== 'all') p.set('addedBy', addedBy);
+      if (sort !== 'newest') p.set('sort', sort);
+      const qs = p.toString();
+      history.replaceState(null, '', '/' + (qs ? '?' + qs : ''));
+    }
+
+    async function refresh() {
+      const list = document.getElementById('list');
+      list.replaceChildren(el('p', {
+        style: { textAlign: 'center', color: 'var(--ink-soft)' },
+      }, 'loading…'));
+
+      const items = await api(
+        `/api/items?addedBy=${encodeURIComponent(addedBy)}&sort=${encodeURIComponent(sort)}`
+      );
+      list.replaceChildren();
+      if (!items.length) {
+        list.appendChild(emptyState());
+        return;
+      }
+      const grid = el('div', { class: 'item-grid' });
+      for (const it of items) grid.appendChild(itemCard(it));
+      list.appendChild(grid);
+    }
+
+    function emptyState() {
+      return el(
+        'div',
+        { class: 'cute-card empty-state' },
+        el('div', { class: 'emoji' }, '🌸'),
+        el('h2', {}, 'empty wishlist!'),
+        el('p', {}, "add the first thing you've been eyeing 👀"),
+        el('a', { href: '/add', class: 'cute-btn' }, '+ add a wish')
+      );
+    }
+
+    function itemCard(it) {
+      const isClaimed = it.status === 'claimed';
+      const isGifted = it.status === 'gifted';
+      const want = wantLevel(it.wantLevel);
+      const ws = WANT_STYLE[it.wantLevel] || WANT_STYLE[3];
+      const cardStyle = isClaimed
+        ? { borderColor: 'rgba(168, 232, 200, 0.6)', background: 'linear-gradient(180deg, #f4fff8 0%, #ffffff 60%)' }
+        : null;
+
+      const meta = el('div', { class: 'item-meta' });
+      meta.appendChild(el(
+        'span',
+        { class: 'want-pill', style: { background: ws.bg, color: ws.color } },
+        `${want.emoji} ${want.label}`
+      ));
+      if (isClaimed && viewer === 'Isaiah') {
+        meta.appendChild(el(
+          'span',
+          { class: 'want-pill', style: { background: '#dcf5e6', color: '#2e7a4e' } },
+          '🤫 secretly claimed'
+        ));
+      }
+      if (isGifted) {
+        meta.appendChild(el(
+          'span',
+          { class: 'want-pill', style: { background: '#fff0db', color: '#b8721e' } },
+          '🎁 gifted'
+        ));
+      }
+
+      const linkEl = el(
+        'a',
+        { href: it.link, target: '_blank', rel: 'noopener noreferrer', class: 'host' },
+        `${hostname(it.link)} ↗`
+      );
+
+      const imgWrap = el('div', { class: 'img-wrap' });
+      if (it.imageUrl) {
+        const img = el('img', { src: it.imageUrl, alt: it.name });
+        const a = el('a', {
+          href: it.link, target: '_blank', rel: 'noopener noreferrer',
+          'aria-label': `open ${it.name}`,
+          style: { display: 'contents' },
+        }, img);
+        imgWrap.appendChild(a);
+      } else {
+        imgWrap.appendChild(el('span', { style: { fontSize: '32px' } }, '🎁'));
+      }
+
+      const body = el(
+        'div',
+        { class: 'item-body' },
+        meta,
+        el('h3', {}, it.name),
+        linkEl
+      );
+
+      const right = el(
+        'div',
+        { style: { textAlign: 'right', flexShrink: '0' } },
+        el('div', { class: 'item-price' }, fmtPrice(it.price)),
+        el('div', { class: 'item-byline' }, it.addedBy === 'Tianna' ? '🍌 Tianna' : '💌 Isaiah')
+      );
+
+      const row = el('div', { class: 'item-row' }, imgWrap, body, right);
+
+      // Footer with actions
+      const actions = el('div', { class: 'actions' });
+      const canEdit = !isGifted && it.addedBy === viewer;
+      const canDelete = canEdit && !(isClaimed && viewer === 'Tianna');
+
+      if (viewer === 'Isaiah' && !isClaimed && !isGifted) {
+        actions.appendChild(actionBtn('🤫 claim', `/api/items/${it.id}/claim`, 'cute-btn-soft'));
+      }
+      if (viewer === 'Isaiah' && isClaimed && it.claimedBy === 'Isaiah') {
+        actions.appendChild(actionBtn('unclaim', `/api/items/${it.id}/unclaim`, 'cute-btn-ghost'));
+        actions.appendChild(actionBtn('🎁 mark gifted', `/api/items/${it.id}/gift`, 'cute-btn'));
+      }
+      if (canEdit) {
+        actions.appendChild(el('a', { href: `/edit?id=${it.id}`, class: 'cute-btn-ghost', 'aria-label': 'edit' }, '✏️'));
+      }
+      if (canDelete) {
+        actions.appendChild(el('button', {
+          type: 'button',
+          class: 'cute-btn-ghost',
+          'aria-label': 'delete',
+          on: {
+            click: async () => {
+              if (!confirm('Delete this item?')) return;
+              await api(`/api/items/${it.id}`, { method: 'DELETE' });
+              refresh();
+            },
+          },
+        }, '🗑️'));
+      }
+
+      const footer = el(
+        'div',
+        { class: 'item-footer' },
+        el('div', { class: 'when' }, `added ${fmtDate(it.createdAt)}`),
+        actions
+      );
+
+      const card = el('div', { class: 'cute-card', style: cardStyle }, row, footer);
+      return card;
+    }
+
+    function actionBtn(label, url, cls) {
+      return el('button', {
+        type: 'button',
+        class: cls,
+        on: {
+          click: async (e) => {
+            e.currentTarget.disabled = true;
+            try {
+              await api(url, { method: 'POST' });
+              refresh();
+            } catch (ex) {
+              alert(ex.message);
+              e.currentTarget.disabled = false;
+            }
+          },
+        },
+      }, label);
+    }
+
+    init().catch((e) => {
+      console.error(e);
+      document.getElementById('list').textContent = 'Something went wrong: ' + e.message;
+    });
+  </script>
+</body>
+</html>
