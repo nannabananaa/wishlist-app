@@ -1,5 +1,5 @@
 import 'server-only';
-import { db, ensureSchema } from './db';
+import { getDb, ensureSchema } from './db';
 import type { ItemStatus, User, WishlistItem } from './types';
 
 type Row = {
@@ -74,7 +74,7 @@ export async function listActiveItems(viewer: User, filters: ListFilters = {}): 
       orderBy = 'created_at DESC';
   }
 
-  const result = await db.execute({
+  const result = await getDb().execute({
     sql: `SELECT * FROM wishlist_items WHERE ${where} ORDER BY ${orderBy}`,
     args,
   });
@@ -84,7 +84,7 @@ export async function listActiveItems(viewer: User, filters: ListFilters = {}): 
 
 export async function listGiftedItems(): Promise<WishlistItem[]> {
   await ensureSchema();
-  const result = await db.execute(
+  const result = await getDb().execute(
     `SELECT * FROM wishlist_items WHERE status = 'gifted' ORDER BY gifted_at DESC`
   );
   return result.rows.map((r) => rowToItem(r as unknown as Row));
@@ -99,7 +99,7 @@ export async function insertItem(input: {
   imageUrl: string | null;
 }): Promise<void> {
   await ensureSchema();
-  await db.execute({
+  await getDb().execute({
     sql: `INSERT INTO wishlist_items (name, link, price, added_by, want_level, image_url)
           VALUES (?, ?, ?, ?, ?, ?)`,
     args: [input.name, input.link, input.price, input.addedBy, input.wantLevel, input.imageUrl],
@@ -120,21 +120,21 @@ export async function updateItem(
 ): Promise<void> {
   await ensureSchema();
   if (input.clearImage) {
-    await db.execute({
+    await getDb().execute({
       sql: `UPDATE wishlist_items
             SET name = ?, link = ?, price = ?, want_level = ?, image_url = NULL
             WHERE id = ? AND added_by = ? AND status != 'gifted'`,
       args: [input.name, input.link, input.price, input.wantLevel, id, requester],
     });
   } else if (input.imageUrl !== null) {
-    await db.execute({
+    await getDb().execute({
       sql: `UPDATE wishlist_items
             SET name = ?, link = ?, price = ?, want_level = ?, image_url = ?
             WHERE id = ? AND added_by = ? AND status != 'gifted'`,
       args: [input.name, input.link, input.price, input.wantLevel, input.imageUrl, id, requester],
     });
   } else {
-    await db.execute({
+    await getDb().execute({
       sql: `UPDATE wishlist_items
             SET name = ?, link = ?, price = ?, want_level = ?
             WHERE id = ? AND added_by = ? AND status != 'gifted'`,
@@ -145,7 +145,7 @@ export async function updateItem(
 
 export async function getItem(id: number): Promise<WishlistItem | null> {
   await ensureSchema();
-  const result = await db.execute({
+  const result = await getDb().execute({
     sql: 'SELECT * FROM wishlist_items WHERE id = ?',
     args: [id],
   });
@@ -155,7 +155,7 @@ export async function getItem(id: number): Promise<WishlistItem | null> {
 
 export async function claimItem(id: number, claimer: User): Promise<void> {
   await ensureSchema();
-  await db.execute({
+  await getDb().execute({
     sql: `UPDATE wishlist_items
           SET status = 'claimed', claimed_by = ?, claimed_at = datetime('now')
           WHERE id = ? AND status = 'available'`,
@@ -165,7 +165,7 @@ export async function claimItem(id: number, claimer: User): Promise<void> {
 
 export async function unclaimItem(id: number, claimer: User): Promise<void> {
   await ensureSchema();
-  await db.execute({
+  await getDb().execute({
     sql: `UPDATE wishlist_items
           SET status = 'available', claimed_by = NULL, claimed_at = NULL
           WHERE id = ? AND status = 'claimed' AND claimed_by = ?`,
@@ -175,7 +175,7 @@ export async function unclaimItem(id: number, claimer: User): Promise<void> {
 
 export async function giftItem(id: number, claimer: User): Promise<void> {
   await ensureSchema();
-  await db.execute({
+  await getDb().execute({
     sql: `UPDATE wishlist_items
           SET status = 'gifted', gifted_at = datetime('now')
           WHERE id = ? AND status = 'claimed' AND claimed_by = ?`,
@@ -185,7 +185,7 @@ export async function giftItem(id: number, claimer: User): Promise<void> {
 
 export async function deleteItem(id: number, requester: User): Promise<void> {
   await ensureSchema();
-  await db.execute({
+  await getDb().execute({
     sql: `DELETE FROM wishlist_items WHERE id = ? AND added_by = ? AND status != 'gifted'`,
     args: [id, requester],
   });

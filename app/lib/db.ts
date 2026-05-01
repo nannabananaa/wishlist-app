@@ -1,19 +1,24 @@
 import 'server-only';
-import { createClient } from '@libsql/client';
+import { createClient, type Client } from '@libsql/client';
 
-const url = process.env.TURSO_URL;
-const authToken = process.env.TURSO_TOKEN;
+let client: Client | null = null;
 
-if (!url) throw new Error('Missing TURSO_URL');
-if (!authToken) throw new Error('Missing TURSO_TOKEN');
-
-export const db = createClient({ url, authToken });
+export function getDb(): Client {
+  if (client) return client;
+  const url = process.env.TURSO_URL;
+  const authToken = process.env.TURSO_AUTH_TOKEN;
+  if (!url) throw new Error('Missing TURSO_URL');
+  if (!authToken) throw new Error('Missing TURSO_AUTH_TOKEN');
+  client = createClient({ url, authToken });
+  return client;
+}
 
 let initialized: Promise<void> | null = null;
 
 export function ensureSchema(): Promise<void> {
   if (!initialized) {
     initialized = (async () => {
+      const db = getDb();
       await db.execute(`
         CREATE TABLE IF NOT EXISTS wishlist_items (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
