@@ -1,0 +1,11 @@
+# Copy this to .dev.vars (gitignored) for `wrangler dev` to pick up secrets locally.
+# In production, set these via `npx wrangler secret put <NAME>` or the Cloudflare dashboard.
+
+TURSO_URL=libsql://your-db.turso.io
+TURSO_AUTH_TOKEN=your-turso-auth-token
+TIANNA_PASSWORD=set-a-password
+ISAIAH_PASSWORD=set-a-password
+SESSION_SECRET=long-random-string
+
+# The worker also accepts older names if those are what you have:
+# TURSO_TOKEN, NANNA_PASSWORD, JENEL_PASSWORD
