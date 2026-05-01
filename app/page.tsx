@@ -1,65 +1,121 @@
-import Image from "next/image";
+import Link from 'next/link';
+import Header from './components/Header';
+import ItemCard from './components/ItemCard';
+import { requireUser } from './lib/auth';
+import { listActiveItems, type ListFilters } from './lib/items';
+import type { User } from './lib/types';
 
-export default function Home() {
+type SearchParams = Promise<{ added_by?: string; sort?: string }>;
+
+const SORT_OPTIONS: { value: NonNullable<ListFilters['sort']>; label: string }[] = [
+  { value: 'newest', label: 'newest first' },
+  { value: 'oldest', label: 'oldest first' },
+  { value: 'price-low', label: 'price: low → high' },
+  { value: 'price-high', label: 'price: high → low' },
+  { value: 'want-high', label: 'want: high → low' },
+  { value: 'want-low', label: 'want: low → high' },
+];
+
+function parseFilters(sp: { added_by?: string; sort?: string }): ListFilters {
+  const addedBy =
+    sp.added_by === 'Tianna' || sp.added_by === 'Isaiah' ? (sp.added_by as User) : 'all';
+  const validSorts = SORT_OPTIONS.map((s) => s.value);
+  const sort = (validSorts as string[]).includes(sp.sort ?? '')
+    ? (sp.sort as ListFilters['sort'])
+    : 'newest';
+  return { addedBy, sort };
+}
+
+export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
+  const user = await requireUser();
+  const sp = await searchParams;
+  const filters = parseFilters(sp);
+  const items = await listActiveItems(user, filters);
+
+  const filterChip = (key: 'added_by' | 'sort', value: string, label: string, current: string) => {
+    const params = new URLSearchParams();
+    if (filters.addedBy && filters.addedBy !== 'all') params.set('added_by', filters.addedBy);
+    if (filters.sort) params.set('sort', filters.sort);
+    params.set(key, value);
+    const isActive = current === value;
+    return (
+      <Link
+        key={`${key}-${value}`}
+        href={`/?${params.toString()}`}
+        className="cute-btn-ghost text-xs"
+        style={
+          isActive
+            ? { background: 'var(--pink)', color: 'white', fontWeight: 600 }
+            : undefined
+        }
+      >
+        {label}
+      </Link>
+    );
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <Header user={user} active="home" />
+      <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10">
+        <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
+          <div>
+            <h1 className="font-display text-3xl sm:text-4xl font-bold">
+              The wishlist 💖
+            </h1>
+            <p className="text-ink-soft text-sm mt-1">
+              {user === 'Tianna'
+                ? 'all your dreamy little wants in one place'
+                : 'pssst — claim items secretly, only you can see those 🤫'}
+            </p>
+          </div>
+          <Link href="/add" className="cute-btn">+ add a wish</Link>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="cute-card p-4 mb-6">
+          <div className="flex items-start gap-4 flex-wrap">
+            <div>
+              <div className="text-xs uppercase tracking-wide font-semibold text-ink-soft mb-2">
+                added by
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {filterChip('added_by', 'all', 'everyone', filters.addedBy ?? 'all')}
+                {filterChip('added_by', 'Tianna', '🍌 Tianna', filters.addedBy ?? 'all')}
+                {filterChip('added_by', 'Isaiah', '💌 Isaiah', filters.addedBy ?? 'all')}
+              </div>
+            </div>
+            <div className="flex-1 min-w-[220px]">
+              <div className="text-xs uppercase tracking-wide font-semibold text-ink-soft mb-2">
+                sort by
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {SORT_OPTIONS.map((opt) => filterChip('sort', opt.value, opt.label, filters.sort ?? 'newest'))}
+              </div>
+            </div>
+          </div>
         </div>
+
+        {items.length === 0 ? (
+          <div className="cute-card p-10 text-center">
+            <div className="text-5xl mb-3">🌸</div>
+            <h2 className="font-display text-xl font-semibold mb-1">empty wishlist!</h2>
+            <p className="text-ink-soft text-sm mb-4">
+              add the first thing you&apos;ve been eyeing 👀
+            </p>
+            <Link href="/add" className="cute-btn inline-block">+ add a wish</Link>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {items.map((item) => (
+              <ItemCard key={item.id} item={item} viewer={user} mode="active" />
+            ))}
+          </div>
+        )}
       </main>
-    </div>
+
+      <footer className="text-center text-xs text-ink-soft/60 py-6">
+        🎀 made with love
+      </footer>
+    </>
   );
 }
